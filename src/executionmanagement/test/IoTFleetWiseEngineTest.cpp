@@ -18,10 +18,43 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include <linux/can.h>
+#include <linux/can/isotp.h>
+#include <sys/socket.h>
+
 using namespace Aws::IoTFleetWise::ExecutionManagement;
 using namespace Aws::IoTFleetWise::DataManagement;
 
-TEST( IoTFleetWiseEngineTest, InitAndStartEngine_LinuxCANDep )
+namespace
+{
+
+bool
+socketAvailable()
+{
+    auto sock = socket( PF_CAN, SOCK_DGRAM, CAN_ISOTP );
+    if ( sock < 0 )
+    {
+        return false;
+    }
+    close( sock );
+    return true;
+}
+} // namespace
+
+class IoTFleetWiseEngineTest : public ::testing::Test
+{
+protected:
+    void
+    SetUp() override
+    {
+        if ( !socketAvailable() )
+        {
+            GTEST_SKIP() << "Skipping test fixture due to unavailability of socket";
+        }
+    }
+};
+
+TEST_F( IoTFleetWiseEngineTest, InitAndStartEngine_LinuxCANDep )
 {
     Json::Value config;
     ASSERT_TRUE( IoTFleetWiseConfig::read( "em-example-config.json", config ) );
@@ -35,7 +68,7 @@ TEST( IoTFleetWiseEngineTest, InitAndStartEngine_LinuxCANDep )
     ASSERT_TRUE( engine.stop() );
 }
 
-TEST( IoTFleetWiseEngineTest, CheckPublishDataQueue_LinuxCANDep )
+TEST_F( IoTFleetWiseEngineTest, CheckPublishDataQueue_LinuxCANDep )
 {
     Json::Value config;
     ASSERT_TRUE( IoTFleetWiseConfig::read( "em-example-config.json", config ) );
@@ -75,7 +108,7 @@ TEST( IoTFleetWiseEngineTest, CheckPublishDataQueue_LinuxCANDep )
     ASSERT_TRUE( engine.stop() );
 }
 
-TEST( IoTFleetWiseEngineTest, InitAndFailToStartCorruptConfig_LinuxCANDep )
+TEST_F( IoTFleetWiseEngineTest, InitAndFailToStartCorruptConfig_LinuxCANDep )
 {
     Json::Value config;
     // Read should succeed
@@ -85,7 +118,7 @@ TEST( IoTFleetWiseEngineTest, InitAndFailToStartCorruptConfig_LinuxCANDep )
     ASSERT_FALSE( engine.connect( config ) );
 }
 
-TEST( IoTFleetWiseEngineTest, TestDataRetrieval_LinuxCANDep )
+TEST_F( IoTFleetWiseEngineTest, TestDataRetrieval_LinuxCANDep )
 {
     Json::Value config;
     ASSERT_TRUE( IoTFleetWiseConfig::read( "em-example-config.json", config ) );

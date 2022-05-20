@@ -114,26 +114,33 @@ sendTestMessage( int socketFD )
     ASSERT_EQ( bytesWritten, sizeof( struct can_frame ) );
 }
 
-class Finally
+class SocketCANBusChannelTest : public ::testing::Test
 {
 public:
-    Finally( std::function<void()> func )
-        : mFunc( func ){};
-    ~Finally()
+    int socketFD;
+
+protected:
+    void
+    SetUp() override
     {
-        mFunc();
+        socketFD = setup();
+        if ( socketFD == -1 )
+        {
+            GTEST_SKIP() << "Skipping test fixture due to unavailability of socket";
+        }
     }
 
-private:
-    std::function<void()> mFunc;
+    void
+    TearDown() override
+    {
+        cleanUp( socketFD );
+    }
 };
 
-TEST( SocketCANBusChannelTest, testAquireDataFromNetwork_LinuxCANDep )
+TEST_F( SocketCANBusChannelTest, testAquireDataFromNetwork_LinuxCANDep )
 {
     localChannelEventListener listener;
-    int socketFD = setup();
     ASSERT_TRUE( socketFD != -1 );
-    Finally finally( [=] { cleanUp( socketFD ); } );
 
     static_cast<void>( socketFD >= 0 );
     SocketCANBusChannel channel( "vcan0", true );
@@ -160,12 +167,10 @@ TEST( SocketCANBusChannelTest, testAquireDataFromNetwork_LinuxCANDep )
     ASSERT_TRUE( listener.gotDisConnectCallback );
 }
 
-TEST( SocketCANBusChannelTest, testDoNotAcquireDataFromNetwork_LinuxCANDep )
+TEST_F( SocketCANBusChannelTest, testDoNotAcquireDataFromNetwork_LinuxCANDep )
 {
     localChannelEventListener listener;
-    int socketFD = setup();
     ASSERT_TRUE( socketFD != -1 );
-    Finally finally( [=] { cleanUp( socketFD ); } );
     static_cast<void>( socketFD >= 0 );
     SocketCANBusChannel channel( "vcan0", true );
     ASSERT_TRUE( channel.init( 1, 1000 ) );
@@ -192,15 +197,13 @@ TEST( SocketCANBusChannelTest, testDoNotAcquireDataFromNetwork_LinuxCANDep )
     ASSERT_TRUE( listener.gotDisConnectCallback );
 }
 
-TEST( SocketCANBusChannelTest, testNetworkDataAquisitionStateChange_LinuxCANDep )
+TEST_F( SocketCANBusChannelTest, testNetworkDataAquisitionStateChange_LinuxCANDep )
 {
     // In this test, we want to start the channel with the default settings i.e. sleep mode,
     // then activate data acquisition and check that the channel buffer effectively has a message,
     // then interrupt the consumption and make sure that the channel is in sleep mode.
     localChannelEventListener listener;
-    int socketFD = setup();
     ASSERT_TRUE( socketFD != -1 );
-    Finally finally( [=] { cleanUp( socketFD ); } );
     static_cast<void>( socketFD >= 0 );
     SocketCANBusChannel channel( "vcan0", true );
     ASSERT_TRUE( channel.init( 1, 1000 ) );

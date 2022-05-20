@@ -410,20 +410,6 @@ generateDecoderDictionary6()
     return dict;
 }
 
-class Finally
-{
-public:
-    Finally( std::function<void()> func )
-        : mFunc( func ){};
-    ~Finally()
-    {
-        mFunc();
-    }
-
-private:
-    std::function<void()> mFunc;
-};
-
 class NetworkChannelBinderTest : public ::testing::Test
 {
 public:
@@ -442,6 +428,11 @@ protected:
     SetUp() override
     {
         socketFD = setup();
+
+        if ( socketFD == -1 )
+        {
+            GTEST_SKIP() << "Skipping test fixture due to unavailability of socket";
+        }
 
         channelPtr.reset( new SocketCANBusChannel( "vcan0", true ) );
         channelPtr2.reset( new SocketCANBusChannel( "vcan0", true ) );
@@ -768,15 +759,12 @@ TEST_F( NetworkChannelBinderTest, NetworkChannelBinderTestDiscardInputBufferWhen
  */
 TEST_F( NetworkChannelBinderTest, NetworkChannelBinderStartupAndShutdownCycle_LinuxCANDep )
 {
-    int socket;
     std::shared_ptr<INetworkChannelBridge> channel;
     std::shared_ptr<INetworkChannelConsumer> consumer;
     std::shared_ptr<const CANDecoderDictionary> dictionary;
     NetworkChannelID channelID;
     NetworkChannelBinder networkBinder;
-    socket = setup();
-    ASSERT_TRUE( socket != -1 );
-    Finally finally( [=] { cleanUp( socket ); } );
+    ASSERT_TRUE( socketFD != -1 );
     channel.reset( new SocketCANBusChannel( "vcan0", true ) );
     ASSERT_TRUE( channel->init( 10000, 1000 ) );
     channelID = channel->getChannelID();
@@ -796,7 +784,7 @@ TEST_F( NetworkChannelBinderTest, NetworkChannelBinderStartupAndShutdownCycle_Li
     // We send few messages on the bus and check that they are neither consumed
     // by the Channel nor by the consumer
     struct can_frame frame = {};
-    sendTestMessage( socket, frame );
+    sendTestMessage( socketFD, frame );
     // Sleep to accommodate the polling frequency of the threads.
     std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
     ASSERT_TRUE( channel->getBuffer()->empty() );
@@ -804,7 +792,7 @@ TEST_F( NetworkChannelBinderTest, NetworkChannelBinderStartupAndShutdownCycle_Li
     // Pass a null decoder manifest, and check that both the channel and the consumer
     // are still sleeping.
     binder.onChangeOfActiveDictionary( nullptr, RAW_SOCKET );
-    sendTestMessage( socket, frame );
+    sendTestMessage( socketFD, frame );
     // Sleep to accommodate the polling frequency of the threads.
     std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
     ASSERT_TRUE( channel->getBuffer()->empty() );
@@ -814,7 +802,7 @@ TEST_F( NetworkChannelBinderTest, NetworkChannelBinderStartupAndShutdownCycle_Li
     dictionary = std::make_shared<const CANDecoderDictionary>( generateDecoderDictionary1() );
     networkBinder.onChangeOfActiveDictionary( dictionary, RAW_SOCKET );
     std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-    sendTestMessage( socket, frame );
+    sendTestMessage( socketFD, frame );
     std::this_thread::sleep_for( std::chrono::seconds( 2 ) );
     ASSERT_FALSE( consumer->getCANBufferPtr()->empty() );
     ASSERT_TRUE( networkBinder.disconnect() );

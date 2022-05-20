@@ -21,11 +21,31 @@
 #include <stdlib.h>
 #include <thread>
 
+#include <linux/can.h>
+#include <linux/can/isotp.h>
+#include <sys/socket.h>
+
 using namespace Aws::IoTFleetWise::DataInspection;
+
+namespace
+{
+
+bool
+socketAvailable()
+{
+    auto sock = socket( PF_CAN, SOCK_DGRAM, CAN_ISOTP );
+    if ( sock < 0 )
+    {
+        return false;
+    }
+    close( sock );
+    return true;
+}
+
 // Initialize the decoder dictionary for this test.
 // Note In actual product, decoder dictionary comes from decoder manifest. For this unit test,
 // The decoder dictionary is initialized based on a local table mode1PIDs in OBDDataDecoder Module.
-static void
+void
 initInspectionMatrix( OBDOverCANModule &module )
 {
     // Prepare the Inspection Engine and the inspection matrix
@@ -57,7 +77,7 @@ initInspectionMatrix( OBDOverCANModule &module )
 // Initialize the decoder dictionary for this test.
 // Note In actual product, decoder dictionary comes from decoder manifest. For this unit test,
 // The decoder dictionary is initialized based on a local table mode1PIDs in OBDDataDecoder Module.
-static void
+void
 initDecoderDictionary( OBDOverCANModule &module )
 {
     auto decoderDictPtr = std::make_shared<CANDecoderDictionary>();
@@ -87,7 +107,22 @@ initDecoderDictionary( OBDOverCANModule &module )
     module.onChangeOfActiveDictionary( decoderDictPtr, OBD );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleInitFailure_LinuxCANDep )
+} // namespace
+
+class OBDOverCANModuleTest : public ::testing::Test
+{
+protected:
+    void
+    SetUp() override
+    {
+        if ( !socketAvailable() )
+        {
+            GTEST_SKIP() << "Skipping test fixture due to unavailability of socket";
+        }
+    }
+};
+
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleInitFailure_LinuxCANDep )
 {
     auto signalBufferPtr = std::make_shared<SignalBuffer>( 256 );
     auto activeDTCBufferPtr = std::make_shared<ActiveDTCBuffer>( 256 );
@@ -98,7 +133,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleInitFailure_LinuxCANDep )
         signalBufferPtr, activeDTCBufferPtr, "vcan0", obdPIDRequestInterval, obdDTCRequestInterval, true, true ) );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANSessionManagerInitTest_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANSessionManagerInitTest_LinuxCANDep )
 {
     OBDOverCANSessionManager sessionManager;
 
@@ -107,7 +142,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANSessionManagerInitTest_LinuxCANDep )
     ASSERT_TRUE( sessionManager.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANSessionManagerAssertMessageSent_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANSessionManagerAssertMessageSent_LinuxCANDep )
 {
     // Setup a receiver on the Bus
     ISOTPOverCANReceiver receiver;
@@ -133,7 +168,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANSessionManagerAssertMessageSent_LinuxCANDe
     ASSERT_TRUE( receiver.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleInitTestSuccess_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleInitTestSuccess_LinuxCANDep )
 {
     auto signalBufferPtr = std::make_shared<SignalBuffer>( 256 );
     auto activeDTCBufferPtr = std::make_shared<ActiveDTCBuffer>( 256 );
@@ -146,7 +181,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleInitTestSuccess_LinuxCANDep )
     ASSERT_TRUE( obdModule.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleInitTestFailure_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleInitTestFailure_LinuxCANDep )
 {
     auto signalBufferPtr = std::make_shared<SignalBuffer>( 256 );
     auto activeDTCBufferPtr = std::make_shared<ActiveDTCBuffer>( 256 );
@@ -157,7 +192,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleInitTestFailure_LinuxCANDep )
         signalBufferPtr, activeDTCBufferPtr, "vcan0", obdPIDRequestInterval, obdDTCRequestInterval, true, true ) );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleAndDecoderManifestLifecycle_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleAndDecoderManifestLifecycle_LinuxCANDep )
 {
     // If no decoder manifest is available, the module should be sleeping and not sending
     // any requests on the bus.
@@ -197,7 +232,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleAndDecoderManifestLifecycle_LinuxCAN
     ASSERT_TRUE( obdModule.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestVIN_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleRequestVIN_LinuxCANDep )
 {
     std::vector<uint8_t> ecmRxPDUData;
     std::vector<uint8_t> ecmTxPDUData;
@@ -240,7 +275,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestVIN_LinuxCANDep )
     ASSERT_TRUE( obdModule.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionSupportedPIDsTest_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionSupportedPIDsTest_LinuxCANDep )
 {
     std::vector<uint8_t> ecmRxPDUData;
     std::vector<uint8_t> ecmTxPDUData;
@@ -327,7 +362,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionSupportedPIDsTest_Lin
     ASSERT_TRUE( obdModule.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionPIDDataTest_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionPIDDataTest_LinuxCANDep )
 {
     std::vector<uint8_t> ecmRxPDUData;
     std::vector<uint8_t> ecmTxPDUData;
@@ -446,7 +481,7 @@ TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestEmissionPIDDataTest_LinuxCAND
     ASSERT_TRUE( obdModule.disconnect() );
 }
 
-TEST( OBDOverCANModuleTest, OBDOverCANModuleRequestPIDAndDTCsTest_LinuxCANDep )
+TEST_F( OBDOverCANModuleTest, OBDOverCANModuleRequestPIDAndDTCsTest_LinuxCANDep )
 {
     std::vector<uint8_t> ecmRxPDUData;
     std::vector<uint8_t> ecmTxPDUData;
